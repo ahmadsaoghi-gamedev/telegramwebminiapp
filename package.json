@@ -2,5 +2,25 @@
   "name": "telegramwebminiapp",
   "private": true,
   "packageManager": "pnpm@9.0.0",
-  "workspaces": ["packages/*"]
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "dependencies": {
+    "@prisma/client": "^6.14.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.12.7",
+    "prisma": "^6.14.0"
+  },
+  "scripts": {
+    "quick-check": "tsx quick-check.ts",
+    "dev:api": "pnpm --filter @telegramwebminiapp/api dev",
+    "dev:web": "pnpm --filter @telegramwebminiapp/web dev",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init"
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.0",
+    "tsx": "^4.20.4"
+  }
 }

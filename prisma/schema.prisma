@@ -1,0 +1,94 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ENUMS
+enum UserPlan {
+  FREE
+  VIP
+}
+
+enum TitleType {
+  MOVIE
+  SERIES
+}
+
+enum PubStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum Provider {
+  HLS
+  MP4
+  EMBED
+  CUSTOM
+}
+
+// TABLES
+model User {
+  id            String    @id @default(uuid())
+  telegramId    String    @unique
+  name          String?
+  username      String?
+  photoUrl      String?
+  plan          UserPlan  @default(FREE)
+  vipExpiresAt  DateTime?
+  points        Int       @default(0)
+  referralCode  String?   @unique
+  referredBy    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  // relations (nanti untuk referral/transactions)
+}
+
+model Title {
+  id           String    @id @default(uuid())
+  title        String
+  type         TitleType
+  overview     String?
+  posterUrl    String?
+  backdropUrl  String?
+  status       PubStatus @default(DRAFT)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  episodes     Episode[]
+  sources      Source[]
+}
+
+model Episode {
+  id             String   @id @default(uuid())
+  titleId        String
+  title          Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episodeNumber  Int
+  name           String?
+  thumbnailUrl   String?
+  createdAt      DateTime @default(now())
+
+  sources        Source[]
+}
+
+model Source {
+  id         String    @id @default(uuid())
+  // Parent bisa Title (full movie) ATAU Episode (per-episode)
+  titleId    String?
+  episodeId  String?
+  title      Title?    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode    Episode?  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  provider   Provider
+  url        String
+  quality    String?
+  lang       String?
+  priority   Int       @default(1)
+  isActive   Boolean   @default(true)
+  subtitles  Json?
+  createdAt  DateTime  @default(now())
+}

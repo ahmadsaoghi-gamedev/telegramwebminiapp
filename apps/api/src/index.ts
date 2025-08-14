@@ -1,27 +1,37 @@
+import "dotenv/config";           // baca .env (DATABASE_URL)
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { contractsVersion, contractHash } from '@telegramwebminiapp/types';
+import { prisma } from "./db/prisma";
 
-const fastify = Fastify({ logger: true });
+const app = Fastify({ logger: true });
 
-fastify.get('/v1/health', async () => ({ ok: true }));
+app.get('/v1/health', async () => ({ ok: true }));
 
-fastify.get('/v1/contracts', async () => ({
+app.get('/v1/contracts', async () => ({
   version: contractsVersion,
   hash: contractHash(),
 }));
-await fastify.register(cors, {
+
+// Debug nyata: hitung dari DB via Prisma
+app.get("/v1/debug/counts", async () => {
+  const [titles, episodes, sources, users] = await Promise.all([
+    prisma.title.count(),
+    prisma.episode.count(),
+    prisma.source.count(),
+    prisma.user.count(),
+  ]);
+  return { titles, episodes, sources, users };
+});
+
+await app.register(cors, {
   origin: ['http://localhost:5173'], // FE dev
   credentials: true
 });
-const start = async () => {
-  try {
-    await fastify.listen({ port: 3000, host: '0.0.0.0' });
-    console.log('API listening on http://localhost:3000');
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-};
 
-start();
+const port = Number(process.env.PORT ?? 3000);
+const host = process.env.HOST ?? "0.0.0.0";
+
+app.listen({ port, host }).then(() => {
+  console.log(`API listening on http://localhost:${port}`);
+});
