@@ -1,0 +1,339 @@
+{
+  "project": {
+    "name": "Telegram Mini App - Streaming & VIP",
+    "description": "Telegram WebApp katalog & pemutar film/series dengan gating FREE/VIP, pembayaran QRIS sandbox, referral, dan admin import. Fokus: hemat token AI dengan eksekusi per-task.",
+    "stack": {
+      "frontend": ["React", "TypeScript", "Vite", "Tailwind", "Zustand", "TanStack Query", "HLS.js", "Telegram WebApp JS API"],
+      "backend": ["Node.js", "TypeScript", "Fastify", "Prisma", "Zod", "pino", "BullMQ"],
+      "infrastructure": ["PostgreSQL", "Redis", "Docker Compose"],
+      "payments": ["Midtrans Sandbox (QRIS Dinamis)"],
+      "devops": ["pnpm workspace", "Cloudflare Tunnel/ngrok (dev only)"]
+    },
+    "env_required": [
+      "DATABASE_URL",
+      "REDIS_URL",
+      "TELEGRAM_BOT_TOKEN",
+      "JWT_SECRET",
+      "APP_BASE_URL",
+      "WEBAPP_URL",
+      "PAYMENT_PROVIDER",
+      "MIDTRANS_SERVER_KEY",
+      "MIDTRANS_CLIENT_KEY"
+    ],
+    "repo_layout": ["apps/web", "apps/api", "apps/worker", "packages/types", "docs"]
+  },
+  "policies": {
+    "single_task": true,
+    "stop_after_task": true,
+    "no_extra_files": true,
+    "no_hidden_deps": true,
+    "place_todos_for_unknowns": true,
+    "respect_acceptance_only": true
+  },
+  "output": {
+    "order": ["file_tree", "files", "readme_or_notes"],
+    "files_as_markdown_blocks": true
+  },
+  "tasks": [
+    {
+      "id": "T0",
+      "title": "Bootstrap Monorepo & Dev Env Minimal",
+      "goal": "Siapkan workspace minimal agar FE/BE/Worker bisa run lokal.",
+      "scope": [
+        "pnpm workspace",
+        "apps/web: Vite+React+TS+Tailwind (page kosong, panggil Telegram.WebApp.ready jika ada)",
+        "apps/api: Fastify+TS (GET /health)",
+        "apps/worker: BullMQ stub",
+        "packages/types: shared zod schemas (kosong dulu)",
+        "docker-compose: postgres+redis",
+        ".env.sample"
+      ],
+      "deliverables": [
+        "pnpm-workspace.yaml",
+        "package.json root & per-app",
+        "apps/web minimal landing",
+        "apps/api src/index.ts GET /health",
+        "apps/worker src/index.ts (listen queue 'validate-source')",
+        "docker-compose.yml (postgres, redis)",
+        ".env.sample",
+        "README dev run singkat"
+      ],
+      "acceptance": [
+        "pnpm -w i berjalan tanpa error",
+        "docker compose up -d menjalankan postgres & redis",
+        "GET http://localhost:3001/health -> {\"ok\":true}",
+        "apps/web live di http://localhost:5173"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Schema Prisma & Migrasi Awal",
+      "goal": "Buat schema konten & user yang scalable.",
+      "scope": [
+        "Model: Title, Season, Episode, Source, User, VipPackage, Transaction, ReferralTransaction, AuditLog",
+        "Enum: TitleType{MOVIE,SERIES}, SourceProvider{HLS,MP4,EMBED,DRIVE,CDN,CUSTOM}, PubStatus{DRAFT,PUBLISHED}",
+        "Relasi sesuai desain",
+        "Prisma migrate dev"
+      ],
+      "deliverables": [
+        "prisma/schema.prisma",
+        "migration files",
+        "script prisma generate"
+      ],
+      "acceptance": [
+        "prisma migrate dev sukses",
+        "prisma studio dapat membuka semua tabel"
+      ],
+      "depends_on": ["T0"]
+    },
+    {
+      "id": "T2",
+      "title": "Auth Telegram: Verify initData & Session",
+      "goal": "Verifikasi initData di server, auto-upsert profil, dan buat session JWT httpOnly.",
+      "scope": [
+        "POST /api/auth/verify {initData}",
+        "GET /api/me",
+        "Verifikasi signature initData (TODO: referensi ke dok resmi, jangan mengarang rumus)",
+        "Upsert user (telegram_id, name, username, photo_url, plan='FREE')",
+        "Set cookie JWT httpOnly SameSite=Lax"
+      ],
+      "deliverables": [
+        "apps/api routes/auth.ts",
+        "JWT util + cookie helper",
+        "apps/web hooks/useAuth.ts untuk kirim initData & simpan profile (Zustand)"
+      ],
+      "acceptance": [
+        "Jika initData valid -> /api/me mengembalikan profil",
+        "Jika invalid -> FE tampilkan pesan 'Akses bermasalah. Buka dari bot & /start'."
+      ],
+      "depends_on": ["T0", "T1"]
+    },
+    {
+      "id": "T3",
+      "title": "Menu Home & API Daftar Konten (Dummy)",
+      "goal": "Home menampilkan katalog dummy dari API, bukan hardcoded FE.",
+      "scope": [
+        "Endpoint GET /titles?filter=populer|terbaru&limit&cursor (dummy in-memory dulu)",
+        "HomePage: grid responsif 2–3 kolom, tab Populer/Terbaru/Semua",
+        "Fetch data via TanStack Query, simpan ringkas di Zustand"
+      ],
+      "deliverables": [
+        "apps/api routes/titles.ts (dummy data)",
+        "apps/web pages/HomePage.tsx + komponen Card",
+        "apps/web services/fetchTitles.ts"
+      ],
+      "acceptance": [
+        "Home render data dari API (bukan array lokal)",
+        "Infinite scroll atau pagination cursor sederhana berjalan"
+      ],
+      "depends_on": ["T2"]
+    },
+    {
+      "id": "T4",
+      "title": "Detail Title & Episode Grid (Dummy)",
+      "goal": "Halaman detail dengan sinopsis & grid episode, data dari API dummy.",
+      "scope": [
+        "GET /titles/:id -> metadata + ringkasan episode",
+        "Route FE /titles/:id menampilkan sinopsis & grid episode",
+        "Tombol 'Tonton' menuju halaman player episode"
+      ],
+      "deliverables": [
+        "apps/api routes/titles.ts (detail endpoint)",
+        "apps/web pages/TitleDetailPage.tsx",
+        "apps/web router setup"
+      ],
+      "acceptance": [
+        "Klik kartu di Home -> pindah ke halaman detail",
+        "Episode grid muncul dan link ke player"
+      ],
+      "depends_on": ["T3"]
+    },
+    {
+      "id": "T5",
+      "title": "Player & Alternatif Source (Dummy)",
+      "goal": "Halaman player HLS/MP4 + daftar alternatif sumber dari API dummy.",
+      "scope": [
+        "GET /episodes/:id/sources -> array mirrors terurut priority",
+        "FE PlayerPage: HLS.js dengan fallback <video>",
+        "UI 'Alternatif' untuk ganti source"
+      ],
+      "deliverables": [
+        "apps/api routes/episodes.ts (dummy sources)",
+        "apps/web pages/PlayerPage.tsx (integrasi HLS.js)",
+        "apps/web components/SourceSwitcher.tsx"
+      ],
+      "acceptance": [
+        "Player memutar link dummy",
+        "Alternatif source dapat dipilih dan berganti tanpa reload"
+      ],
+      "depends_on": ["T4"]
+    },
+    {
+      "id": "T6",
+      "title": "Importer CSV/JSON & Validator Worker (Stub Dev)",
+      "goal": "Impor konten bulk dan validasi URL dasar (stub dev, belum ffprobe).",
+      "scope": [
+        "POST /admin/import/csv (multipart) -> parse template, upsert Title/Episode/Source",
+        "POST /admin/import/json -> upsert",
+        "Worker job 'validate-source' (HEAD request saja di dev) set is_active",
+        "AuditLog simpan hasil",
+        "docs/templates/contents.csv dan title.json"
+      ],
+      "deliverables": [
+        "apps/api routes/adminImport.ts",
+        "apps/worker jobs/validateSource.ts",
+        "docs/templates/contents.csv",
+        "docs/templates/title.json"
+      ],
+      "acceptance": [
+        "Impor minimal 10 item sukses",
+        "Status is_active tergantung hasil HEAD",
+        "Judul DRAFT tidak tampil di Home"
+      ],
+      "depends_on": ["T1", "T0"]
+    },
+    {
+      "id": "T7",
+      "title": "Gating VIP & Paywall (Tanpa Pembayaran)",
+      "goal": "Kunci episode/quality tertentu untuk non-VIP dan tampilkan paywall basic.",
+      "scope": [
+        "Server: middleware requireVIP untuk endpoint tertentu (hanya cek user.plan)",
+        "FE: jika non-VIP akses konten terkunci -> tampilkan paywall + Telegram MainButton('Upgrade ke VIP')",
+        "Tanpa integrasi bayar dulu (hanya UI/flow)"
+      ],
+      "deliverables": [
+        "apps/api middleware/requireVIP.ts",
+        "apps/web components/Paywall.tsx",
+        "Integrasi MainButton show/hide sesuai state"
+      ],
+      "acceptance": [
+        "Konten terkunci memunculkan paywall",
+        "MainButton muncul saat perlu upgrade dan hilang setelah batal"
+      ],
+      "depends_on": ["T5", "T2"]
+    },
+    {
+      "id": "T8",
+      "title": "Integrasi QRIS Sandbox (Midtrans) + Webhook",
+      "goal": "Transaksi VIP via QRIS dinamis (sandbox), set plan=VIP saat webhook PAID.",
+      "scope": [
+        "POST /api/payments/create {plan_id} -> {payment_id, qr, expires_at}",
+        "POST /api/payments/webhook -> verifikasi signature provider, set status=PAID, user.plan=VIP, expires_at",
+        "GET /api/payments/:id/status",
+        "Idempotency pada create & webhook",
+        "FE modal QR + countdown + polling status"
+      ],
+      "deliverables": [
+        "apps/api routes/payments.ts (service Midtrans sandbox)",
+        "apps/web components/PaymentModal.tsx",
+        ".env.sample tambahkan MIDTRANS_*, PAYMENT_PROVIDER='midtrans'"
+      ],
+      "acceptance": [
+        "Flow sandbox berjalan end-to-end",
+        "Saat PAID -> profil user menjadi VIP, paywall hilang"
+      ],
+      "depends_on": ["T7", "T2"]
+    },
+    {
+      "id": "T9",
+      "title": "Library: Favorit & Riwayat",
+      "goal": "Simpan favorit dan histori tonton.",
+      "scope": [
+        "POST /library/favorites, DELETE /library/favorites/:id, GET /library/favorites",
+        "POST /history/log, GET /history",
+        "FE tab Perpustakaan menampilkan favorit & riwayat"
+      ],
+      "deliverables": [
+        "apps/api routes/library.ts",
+        "apps/web pages/LibraryPage.tsx",
+        "apps/web services/library.ts"
+      ],
+      "acceptance": [
+        "Tambah/hapus favorit bekerja",
+        "Histori tontonan tercatat dan tampil"
+      ],
+      "depends_on": ["T5", "T2"]
+    },
+    {
+      "id": "T10",
+      "title": "Referral & Komisi Dasar",
+      "goal": "Tracking referral via start parameter dan komisi saat VIP terjual.",
+      "scope": [
+        "User.referral_code unik",
+        "Saat /auth/verify ada start_param -> set referred_by",
+        "Saat payment PAID -> buat ReferralTransaction untuk referrer",
+        "Stats sederhana per user"
+      ],
+      "deliverables": [
+        "apps/api routes/referral.ts",
+        "apps/web components/ReferralCard.tsx (link share)",
+        "Update payments webhook untuk komisi"
+      ],
+      "acceptance": [
+        "Pembelian oleh referee menambah komisi referrer",
+        "Stats dasar dapat ditarik"
+      ],
+      "depends_on": ["T8", "T2", "T1"]
+    },
+    {
+      "id": "T11",
+      "title": "Seed Data & Mode Dev Mock (Tanpa Telegram)",
+      "goal": "Mudah uji lokal tanpa Telegram & isi contoh data.",
+      "scope": [
+        "prisma/seed.ts untuk paket VIP, contoh titles/episodes/sources",
+        "Mode dev '?devUser=1' -> bypass initData dan set user FREE",
+        "Script npm untuk seed dan mock"
+      ],
+      "deliverables": [
+        "prisma/seed.ts",
+        "apps/api middleware/devMock.ts",
+        "README instruksi seed & mock"
+      ],
+      "acceptance": [
+        "Seed berhasil mengisi contoh konten",
+        "Mode mock menampilkan profil FREE di FE tanpa Telegram"
+      ],
+      "depends_on": ["T1", "T0", "T2"]
+    },
+    {
+      "id": "T12",
+      "title": "Testing Minimal (Smoke) FE/BE",
+      "goal": "Cakupan smoke test untuk flow utama.",
+      "scope": [
+        "FE: Playwright 3 test (home render, detail/episode, paywall muncul)",
+        "BE: vitest untuk /health, /titles, /auth/verify (mock)",
+        "Script npm test:e2e dan test:unit"
+      ],
+      "deliverables": [
+        "apps/web tests/e2e/*.spec.ts",
+        "apps/api tests/*.test.ts",
+        "CI lokal: npm scripts"
+      ],
+      "acceptance": [
+        "Semua test hijau lokal",
+        "Dokumentasi cara jalanin test"
+      ],
+      "depends_on": ["T3", "T4", "T7"]
+    },
+    {
+      "id": "T13",
+      "title": "Dokumentasi Dev & Expose ke Telegram",
+      "goal": "Dokumentasi run lokal, tunnel, dan set WebApp di BotFather.",
+      "scope": [
+        "README: pnpm -w dev, docker compose, konfigurasi tunnel",
+        "Langkah set WebApp URL dan startapp di BotFather",
+        "Checklist security: rate-limit, CORS origin FE, cookie httpOnly, verifikasi initData server, webhook signature"
+      ],
+      "deliverables": [
+        "docs/DEV_SETUP.md",
+        "docs/SECURITY_CHECKLIST.md",
+        "Update README root"
+      ],
+      "acceptance": [
+        "WebApp bisa dibuka dari bot (dev URL)",
+        "Checklist dev dipenuhi"
+      ],
+      "depends_on": ["T0", "T2", "T8"]
+    }
+  ]
+}
