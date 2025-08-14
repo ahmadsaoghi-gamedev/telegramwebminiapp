@@ -33,6 +33,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.1.0
         version: 11.1.0
+      '@prisma/client':
+        specifier: ^6.14.0
+        version: 6.14.0(prisma@6.14.0(typescript@5.9.2))(typescript@5.9.2)
       '@telegramwebminiapp/types':
         specifier: workspace:*
         version: link:../../packages/types
