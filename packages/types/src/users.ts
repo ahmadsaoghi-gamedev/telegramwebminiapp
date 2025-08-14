@@ -9,4 +9,6 @@ export const zUserProfile = z.object({
   plan: z.enum(['FREE', 'VIP']),
   vipExpiresAt: z.string().optional(),
   points: z.number().int().min(0),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });

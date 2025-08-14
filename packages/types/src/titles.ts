@@ -6,6 +6,8 @@ export const zTitleCard = z.object({
   type: z.enum(['MOVIE', 'SERIES']),
   posterUrl: z.string().optional(),
   status: z.enum(['DRAFT', 'PUBLISHED']),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
 
 export const zTitleListRequest = z.object({
@@ -30,4 +32,6 @@ export const zTitleDetail = z.object({
     episodeNumber: z.number().int().min(1),
     name: z.string().optional(),
   })).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
