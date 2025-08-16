@@ -28,7 +28,8 @@ export type TitleListResponse = z.infer<typeof zTitleListResponse>;
 export const zEpisodeSummary = z.object({
   id: zId,
   episodeNumber: z.number().int().min(1),
-  name: z.string().optional()
+  name: z.string().optional(),
+  thumbnailUrl: z.string().url().optional()
 });
 
 export const zTitleDetail = z.object({
@@ -36,8 +37,10 @@ export const zTitleDetail = z.object({
   title: z.string(),
   type: zTitleType,
   overview: z.string().optional(),
+  posterUrl: z.string().url().optional(),
   backdropUrl: z.string().url().optional(),
-  episodes: z.array(zEpisodeSummary).optional(),
+  hasFullMovie: z.boolean().optional(), // Only for MOVIE type
+  episodes: z.array(zEpisodeSummary).optional(), // Only for SERIES type
   createdAt: zISODate,
   updatedAt: zISODate
 });

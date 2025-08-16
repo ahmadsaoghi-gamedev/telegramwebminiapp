@@ -1,7 +1,7 @@
 import "dotenv/config";           // baca .env (DATABASE_URL)
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { contractsVersion, zTitleListRequest, zTitleListResponse, TitleCard } from '@telegramwebminiapp/types';
+import { contractsVersion, zTitleListRequest, zTitleListResponse, TitleCard, zTitleDetail, TitleDetail } from '@telegramwebminiapp/types';
 import { prisma } from "./db/prisma";
 
 const app = Fastify({ logger: true });
@@ -86,6 +86,80 @@ app.get('/v1/titles', async (request, reply) => {
 
     // Validate response before sending
     const validatedResponse = zTitleListResponse.parse(response);
+    return reply.send(validatedResponse);
+  } catch (error) {
+    app.log.error(error);
+    return reply.status(500).send({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/titles/:id - Get title detail by ID
+app.get('/v1/titles/:id', async (request, reply) => {
+  try {
+    const { id } = request.params as { id: string };
+
+    // Fetch title with episodes from database
+    const title = await prisma.title.findUnique({
+      where: { id },
+      include: {
+        episodes: {
+          orderBy: { episodeNumber: 'asc' },
+          select: {
+            id: true,
+            episodeNumber: true,
+            name: true,
+            thumbnailUrl: true
+          }
+        },
+        sources: {
+          where: { episodeId: null }, // Only sources directly on title (for movies)
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!title) {
+      return reply.status(404).send({ error: 'Title not found' });
+    }
+
+    // Build response based on type
+    let response: TitleDetail;
+    
+    if (title.type === 'MOVIE') {
+      // For movies, check if there are sources available
+      response = {
+        id: title.id,
+        title: title.title,
+        type: title.type as "MOVIE" | "SERIES",
+        overview: title.overview || undefined,
+        posterUrl: title.posterUrl || undefined,
+        backdropUrl: title.backdropUrl || undefined,
+        hasFullMovie: title.sources.length > 0,
+        createdAt: title.createdAt.toISOString(),
+        updatedAt: title.updatedAt.toISOString()
+      };
+    } else {
+      // For series, include episodes
+      response = {
+        id: title.id,
+        title: title.title,
+        type: title.type as "MOVIE" | "SERIES",
+        overview: title.overview || undefined,
+        posterUrl: title.posterUrl || undefined,
+        backdropUrl: title.backdropUrl || undefined,
+        episodes: title.episodes.map(ep => ({
+          id: ep.id,
+          episodeNumber: ep.episodeNumber,
+          name: ep.name || undefined,
+          thumbnailUrl: ep.thumbnailUrl || undefined
+        })),
+        createdAt: title.createdAt.toISOString(),
+        updatedAt: title.updatedAt.toISOString()
+      };
+    }
+
+    // Validate response before sending
+    const validatedResponse = zTitleDetail.parse(response);
     return reply.send(validatedResponse);
   } catch (error) {
     app.log.error(error);
